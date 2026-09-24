@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Play Heliosylva</title>
+<style>
+  @font-face{
+    font-family:'Dico';
+    src:url('fonts/Dico.ttf') format('truetype');
+    font-display:swap;
+  }
+  :root{
+    --parchment:#EAD9AE;
+    --ink:#3D2723;
+    --wood:#7C5238;
+    --wood-outer:#5C3220;
+    --blossom:#D88FA7;
+    --blossom-deep:#B96A85;
+    --cream-text:#F5ECD7;
+    --shadow-hard: 6px 6px 0 rgba(0,0,0,0.28);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background:var(--parchment);
+    color:var(--ink);
+    font-family:'Dico',sans-serif;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:32px 16px 60px;
+  }
+
+  /* Loading overlay */
+  #loader{
+    position:fixed;
+    inset:0;
+    background:var(--ink);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:28px;
+    z-index:100;
+    transition:opacity 0.6s ease;
+  }
+  #loader.fade-out{opacity:0;pointer-events:none;}
+  .loader-art{
+    width:min(420px, 90vw);
+    image-rendering:pixelated;
+    border:3px solid var(--wood);
+    box-shadow:var(--shadow-hard);
+  }
+  .loader-title{
+    font-family:'Dico',sans-serif;
+    font-weight:700;
+    font-size:clamp(22px,5vw,36px);
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--cream-text);
+    text-align:center;
+  }
+  .loader-sub{
+    font-size:13px;
+    color:#A08070;
+    text-align:center;
+    max-width:340px;
+    line-height:1.5;
+  }
+  .bar-wrap{
+    width:min(340px, 80vw);
+    height:12px;
+    background:#1a1008;
+    border:2px solid var(--wood);
+    border-radius:2px;
+    overflow:hidden;
+  }
+  #bar{
+    height:100%;
+    width:0%;
+    background:var(--blossom-deep);
+    transition:width 0.3s ease;
+  }
+  #pct{
+    font-size:12px;
+    color:#A08070;
+    letter-spacing:0.04em;
+  }
+
+  /* Page chrome */
+  h1{
+    font-family:'Dico',sans-serif;
+    font-weight:700;
+    font-size:clamp(26px,4vw,36px);
+    margin-bottom:8px;
+    text-align:center;
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+  }
+  .back{
+    display:inline-block;
+    margin-bottom:28px;
+    font-family:'Dico',sans-serif;
+    font-size:14px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--ink);
+    text-decoration:none;
+    border-bottom:2px solid var(--wood);
+    transition:color 0.25s ease,transform 0.25s ease;
+  }
+  .back:hover{color:var(--blossom-deep);transform:scale(1.04);}
+  .frame{
+    padding:10px;
+    background:var(--wood-outer);
+    border-radius:4px;
+    box-shadow:var(--shadow-hard);
+    width:1300px;
+  }
+  .frame .inner{
+    border:2px solid var(--wood);
+    border-radius:2px;
+    overflow:hidden;
+    line-height:0;
+  }
+  iframe{
+    width:1280px;
+    height:720px;
+    border:none;
+    display:block;
+  }
+  .scroll-wrap{
+    width:100%;
+    overflow-x:auto;
+    display:flex;
+    justify-content:center;
+  }
+  .note{
+    margin-top:20px;
+    font-size:13px;
+    color:#6B4E37;
+    max-width:600px;
+    text-align:center;
+  }
+</style>
+</head>
+<body>
+
+  <!-- Loading overlay — fades out once the iframe signals it's ready -->
+  <div id="loader">
+    <img class="loader-art" src="images/hero_scene.png" alt="Heliosylva start screen">
+    <div class="loader-title">Heliosylva</div>
+    <div class="bar-wrap"><div id="bar"></div></div>
+    <div id="pct">Loading Python runtime…</div>
+    <div class="loader-sub">Downloading a full Python runtime to your browser. Should take 10–20 seconds on a decent connection.</div>
+  </div>
+
+  <a class="back" href="index.html">&larr; Back to Overview</a>
+
+  <div class="scroll-wrap">
+    <div class="frame" id="frame">
+      <div class="inner">
+        <iframe id="game-frame" src="game/index.html" allow="autoplay"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <p class="note">Best viewed on a laptop/desktop screen at full width, in a Chromium-based browser (Chrome, Edge, Brave) — the game runs at a fixed 1280&times;720 to keep controls properly aligned. On a narrower screen, scroll the frame above horizontally.</p>
+
+<script>
+  (function(){
+    var bar = document.getElementById('bar');
+    var pct = document.getElementById('pct');
+    var loader = document.getElementById('loader');
+    var frame = document.getElementById('game-frame');
+    var done = false;
+
+    var messages = [
+      [10,  'Loading Python runtime…'],
+      [30,  'Unpacking game assets…'],
+      [55,  'Initialising Raylib…'],
+      [75,  'Building the first wave…'],
+      [90,  'Almost there…'],
+    ];
+    var step = 0;
+    var current = 0;
+
+    function tick(){
+      if(done) return;
+      var target = step < messages.length ? messages[step][0] : 92;
+      if(current < target){
+        current = Math.min(current + 1, target);
+        bar.style.width = current + '%';
+        if(step < messages.length && current >= messages[step][0]){
+          pct.textContent = messages[step][1];
+          step++;
+        }
+      }
+      setTimeout(tick, 120);
+    }
+
+    function finish(){
+      if(done) return;
+      done = true;
+      current = 100;
+      bar.style.width = '100%';
+      pct.textContent = 'Ready.';
+      setTimeout(function(){
+        loader.classList.add('fade-out');
+        setTimeout(function(){ loader.style.display='none'; }, 650);
+      }, 400);
+    }
+
+    tick();
+
+    // Detect iframe load — works for same-origin; for cross-origin Pygbag
+    // this may fire early (on the shell page), but it's better than nothing.
+    frame.addEventListener('load', finish);
+
+    // Fallback: dismiss after 25 s regardless
+    setTimeout(finish, 25000);
+  })();
+</script>
+
+</body>
+</html>
